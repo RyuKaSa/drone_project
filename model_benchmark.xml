@@ -1,0 +1,187 @@
+<mujoco model="TripleDrone_Benchmark">
+  <!--
+    3 Drones superimposed for visual comparison:
+    - PID: Green
+    - DAgger: Blue  
+    - PPO: Red
+    No collision between drones (contype=2, conaffinity=1)
+    Collide with ground only.
+  -->
+
+  <compiler autolimits="true"/>
+  
+  <option timestep="0.005" density="1.225" viscosity="1.8e-5" gravity="0 0 -9.81">
+    <flag warmstart="enable"/>
+  </option>
+
+  <default>
+    <joint damping="0.001"/>
+    <!-- Default: collide with nothing -->
+    <geom contype="0" conaffinity="0"/>
+  </default>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.35 0.35 0.35" rgb2="0.25 0.25 0.25" width="512" height="512"/>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.6 0.7 0.9" rgb2="0.2 0.3 0.5" width="512" height="512"/>
+    <material name="ground_mat" texture="grid" texrepeat="40 40" reflectance="0.1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Ground: contype=1 so drones can land -->
+    <geom name="ground" type="plane" size="200 200 0.1" material="ground_mat" contype="1" conaffinity="1"/>
+    <light name="sun" directional="true" pos="0 0 10" dir="0.3 0.3 -1" diffuse="0.9 0.9 0.9" castshadow="true"/>
+    <light name="fill" directional="true" pos="-5 -5 8" dir="0.5 0.5 -1" diffuse="0.3 0.3 0.3"/>
+
+    <!-- ============================================================ -->
+    <!-- DRONE PID - GREEN (contype=2, conaffinity=1 = collide ground only) -->
+    <!-- ============================================================ -->
+    <body name="drone_pid" pos="0 0 3">
+      <freejoint name="root_pid"/>
+      <inertial pos="0 0 0" mass="1.5" diaginertia="0.02 0.02 0.03"/>
+      
+      <geom name="chassis_pid" type="box" size="0.1 0.06 0.03" rgba="0.15 0.6 0.15 1" mass="1.0" contype="2" conaffinity="1"/>
+      <geom name="cover_pid" type="box" size="0.08 0.05 0.015" pos="0 0 0.04" rgba="0.2 0.7 0.2 1"/>
+      
+      <geom type="capsule" fromto="0.05 -0.04 0 0.17 -0.17 0" size="0.012" rgba="0.1 0.5 0.1 1"/>
+      <geom type="capsule" fromto="0.05 0.04 0 0.17 0.17 0" size="0.012" rgba="0.1 0.5 0.1 1"/>
+      <geom type="capsule" fromto="-0.05 -0.04 0 -0.17 -0.17 0" size="0.012" rgba="0.1 0.5 0.1 1"/>
+      <geom type="capsule" fromto="-0.05 0.04 0 -0.17 0.17 0" size="0.012" rgba="0.1 0.5 0.1 1"/>
+      
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 -0.17 0.01" rgba="0.05 0.4 0.05 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 0.17 0.01" rgba="0.05 0.4 0.05 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 0.17 0.01" rgba="0.05 0.4 0.05 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 -0.17 0.01" rgba="0.05 0.4 0.05 1"/>
+      
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 -0.17 0.03" rgba="0.1 0.4 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 0.17 0.03" rgba="0.1 0.4 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 0.17 0.03" rgba="0.1 0.4 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 -0.17 0.03" rgba="0.1 0.4 0.1 0.6"/>
+      
+      <site name="thrust_fr_pid" pos="0.17 -0.17 0.03" size="0.01"/>
+      <site name="thrust_fl_pid" pos="0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rl_pid" pos="-0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rr_pid" pos="-0.17 -0.17 0.03" size="0.01"/>
+      
+      <geom type="box" size="0.03 0.008 0.008" pos="0.13 0 0.04" rgba="0.4 1 0.4 1"/>
+      
+      <geom type="sphere" size="0.018" pos="0.12 -0.12 -0.06" rgba="0.1 0.4 0.1 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="0.12 0.12 -0.06" rgba="0.1 0.4 0.1 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 0.12 -0.06" rgba="0.1 0.4 0.1 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 -0.12 -0.06" rgba="0.1 0.4 0.1 1" contype="2" conaffinity="1"/>
+    </body>
+
+    <!-- TARGET PID - GREEN -->
+    <body name="target_pid" mocap="true" pos="0 5 3">
+      <geom type="box" size="0.25 0.25 0.25" rgba="0.2 0.9 0.2 0.3"/>
+      <geom type="sphere" size="0.1" rgba="0.3 1 0.3 0.8"/>
+    </body>
+
+    <!-- ============================================================ -->
+    <!-- DRONE DAGGER - BLUE -->
+    <!-- ============================================================ -->
+    <body name="drone_dagger" pos="0 0 3">
+      <freejoint name="root_dagger"/>
+      <inertial pos="0 0 0" mass="1.5" diaginertia="0.02 0.02 0.03"/>
+      
+      <geom name="chassis_dagger" type="box" size="0.1 0.06 0.03" rgba="0.15 0.15 0.6 1" mass="1.0" contype="2" conaffinity="1"/>
+      <geom name="cover_dagger" type="box" size="0.08 0.05 0.015" pos="0 0 0.04" rgba="0.2 0.2 0.7 1"/>
+      
+      <geom type="capsule" fromto="0.05 -0.04 0 0.17 -0.17 0" size="0.012" rgba="0.1 0.1 0.5 1"/>
+      <geom type="capsule" fromto="0.05 0.04 0 0.17 0.17 0" size="0.012" rgba="0.1 0.1 0.5 1"/>
+      <geom type="capsule" fromto="-0.05 -0.04 0 -0.17 -0.17 0" size="0.012" rgba="0.1 0.1 0.5 1"/>
+      <geom type="capsule" fromto="-0.05 0.04 0 -0.17 0.17 0" size="0.012" rgba="0.1 0.1 0.5 1"/>
+      
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 -0.17 0.01" rgba="0.05 0.05 0.4 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 0.17 0.01" rgba="0.05 0.05 0.4 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 0.17 0.01" rgba="0.05 0.05 0.4 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 -0.17 0.01" rgba="0.05 0.05 0.4 1"/>
+      
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 -0.17 0.03" rgba="0.1 0.1 0.4 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 0.17 0.03" rgba="0.1 0.1 0.4 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 0.17 0.03" rgba="0.1 0.1 0.4 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 -0.17 0.03" rgba="0.1 0.1 0.4 0.6"/>
+      
+      <site name="thrust_fr_dagger" pos="0.17 -0.17 0.03" size="0.01"/>
+      <site name="thrust_fl_dagger" pos="0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rl_dagger" pos="-0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rr_dagger" pos="-0.17 -0.17 0.03" size="0.01"/>
+      
+      <geom type="box" size="0.03 0.008 0.008" pos="0.13 0 0.04" rgba="0.4 0.4 1 1"/>
+      
+      <geom type="sphere" size="0.018" pos="0.12 -0.12 -0.06" rgba="0.1 0.1 0.4 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="0.12 0.12 -0.06" rgba="0.1 0.1 0.4 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 0.12 -0.06" rgba="0.1 0.1 0.4 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 -0.12 -0.06" rgba="0.1 0.1 0.4 1" contype="2" conaffinity="1"/>
+    </body>
+
+    <!-- TARGET DAGGER - BLUE -->
+    <body name="target_dagger" mocap="true" pos="0 5 3">
+      <geom type="box" size="0.25 0.25 0.25" rgba="0.2 0.2 0.9 0.3"/>
+      <geom type="sphere" size="0.1" rgba="0.3 0.3 1 0.8"/>
+    </body>
+
+    <!-- ============================================================ -->
+    <!-- DRONE PPO - RED -->
+    <!-- ============================================================ -->
+    <body name="drone_ppo" pos="0 0 3">
+      <freejoint name="root_ppo"/>
+      <inertial pos="0 0 0" mass="1.5" diaginertia="0.02 0.02 0.03"/>
+      
+      <geom name="chassis_ppo" type="box" size="0.1 0.06 0.03" rgba="0.6 0.15 0.15 1" mass="1.0" contype="2" conaffinity="1"/>
+      <geom name="cover_ppo" type="box" size="0.08 0.05 0.015" pos="0 0 0.04" rgba="0.7 0.2 0.2 1"/>
+      
+      <geom type="capsule" fromto="0.05 -0.04 0 0.17 -0.17 0" size="0.012" rgba="0.5 0.1 0.1 1"/>
+      <geom type="capsule" fromto="0.05 0.04 0 0.17 0.17 0" size="0.012" rgba="0.5 0.1 0.1 1"/>
+      <geom type="capsule" fromto="-0.05 -0.04 0 -0.17 -0.17 0" size="0.012" rgba="0.5 0.1 0.1 1"/>
+      <geom type="capsule" fromto="-0.05 0.04 0 -0.17 0.17 0" size="0.012" rgba="0.5 0.1 0.1 1"/>
+      
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 -0.17 0.01" rgba="0.4 0.05 0.05 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 0.17 0.01" rgba="0.4 0.05 0.05 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 0.17 0.01" rgba="0.4 0.05 0.05 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 -0.17 0.01" rgba="0.4 0.05 0.05 1"/>
+      
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 -0.17 0.03" rgba="0.4 0.1 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 0.17 0.03" rgba="0.4 0.1 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 0.17 0.03" rgba="0.4 0.1 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 -0.17 0.03" rgba="0.4 0.1 0.1 0.6"/>
+      
+      <site name="thrust_fr_ppo" pos="0.17 -0.17 0.03" size="0.01"/>
+      <site name="thrust_fl_ppo" pos="0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rl_ppo" pos="-0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rr_ppo" pos="-0.17 -0.17 0.03" size="0.01"/>
+      
+      <geom type="box" size="0.03 0.008 0.008" pos="0.13 0 0.04" rgba="1 0.4 0.4 1"/>
+      
+      <geom type="sphere" size="0.018" pos="0.12 -0.12 -0.06" rgba="0.4 0.1 0.1 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="0.12 0.12 -0.06" rgba="0.4 0.1 0.1 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 0.12 -0.06" rgba="0.4 0.1 0.1 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 -0.12 -0.06" rgba="0.4 0.1 0.1 1" contype="2" conaffinity="1"/>
+    </body>
+
+    <!-- TARGET PPO - RED -->
+    <body name="target_ppo" mocap="true" pos="0 5 3">
+      <geom type="box" size="0.25 0.25 0.25" rgba="0.9 0.2 0.2 0.3"/>
+      <geom type="sphere" size="0.1" rgba="1 0.3 0.3 0.8"/>
+    </body>
+
+  </worldbody>
+
+  <!-- ACTUATORS -->
+  <actuator>
+    <motor name="motor_fr_pid" site="thrust_fr_pid" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_fl_pid" site="thrust_fl_pid" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    <motor name="motor_rl_pid" site="thrust_rl_pid" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_rr_pid" site="thrust_rr_pid" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    
+    <motor name="motor_fr_dagger" site="thrust_fr_dagger" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_fl_dagger" site="thrust_fl_dagger" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    <motor name="motor_rl_dagger" site="thrust_rl_dagger" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_rr_dagger" site="thrust_rr_dagger" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    
+    <motor name="motor_fr_ppo" site="thrust_fr_ppo" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_fl_ppo" site="thrust_fl_ppo" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    <motor name="motor_rl_ppo" site="thrust_rl_ppo" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_rr_ppo" site="thrust_rr_ppo" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+  </actuator>
+
+</mujoco>
