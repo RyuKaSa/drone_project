@@ -1,13 +1,12 @@
 """
 Pure PID Controller - No wall-clock dependencies.
-Drop-in replacement for simple_pid that works correctly in fast simulation.
+Drop-in replacement for simple_pid that works correctly in accelerated simulation.
 """
 
 import numpy as np
 
 
 class PurePID:
-    """PID controller with NO wall-clock timing - purely uses passed dt."""
     
     def __init__(self, kp, ki, kd, setpoint=0, output_limits=(None, None)):
         self.kp = kp
@@ -52,10 +51,6 @@ class PurePID:
 
 
 class SimplePIDController:
-    """
-    Drone PID controller using pure simulation time.
-    No wall-clock dependencies - runs correctly at any simulation speed.
-    """
     
     def __init__(self, dt=0.002):
         self.dt = dt

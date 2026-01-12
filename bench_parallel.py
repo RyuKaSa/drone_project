@@ -1,6 +1,7 @@
 """
 Parallel Visual Benchmark: PID vs DAgger vs PPO
 Same position, same targets, trajectory trails.
+With smooth tracking camera following all drones.
 """
 
 import numpy as np
@@ -19,10 +20,134 @@ from pid_controller import SimplePIDController
 
 
 # ============================================================================
-# TRAJECTORY TRAIL RENDERER
+# TRACKING CAMERA FOR MULTIPLE DRONES
 # ============================================================================
 
-# VERSION ALTERNATIVE avec sphères (plus compatible)
+class MultiDroneTrackingCamera:
+    """
+    Smooth tracking camera with FIXED orientation for multiple drones.
+    
+    Computes lookat as weighted centroid of all drone and target positions.
+    Uses smooth exponential lerp with extra smoothing during target transitions.
+    """
+    
+    def __init__(self, viewer, distance=10.0, azimuth=135.0, elevation=-20.0):
+        self.viewer = viewer
+        
+        # Camera position (what we're looking at)
+        self.lookat = np.array([0.0, 0.0, 3.0])
+        
+        # FIXED camera orientation - set once, never changes
+        self.distance = distance
+        self.azimuth = azimuth
+        self.elevation = elevation
+        
+        # Lerp configuration
+        self.normal_speed = 0.04          # Slower base tracking
+        self.transition_speed = 0.012     # Much slower during transitions
+        
+        # Transition state
+        self.in_transition = False
+        self.transition_frames = 0
+        self.transition_duration = 80     # Longer transition period
+        
+        # Velocity-based smoothing (for extra smoothness)
+        self.lookat_velocity = np.zeros(3)
+        self.velocity_damping = 0.85      # How much velocity carries over
+        
+        self._apply_camera()
+    
+    def _apply_camera(self):
+        """Apply camera state to viewer."""
+        self.viewer.cam.lookat[:] = self.lookat
+        self.viewer.cam.distance = self.distance
+        self.viewer.cam.azimuth = self.azimuth
+        self.viewer.cam.elevation = self.elevation
+    
+    def _compute_centroid(self, drone_positions, target_positions):
+        """
+        Compute weighted centroid of all drones and targets.
+        
+        Drones get slightly more weight to keep them more centered.
+        Only includes non-crashed drones.
+        """
+        points = []
+        weights = []
+        
+        # Add drone positions (higher weight)
+        for name, pos in drone_positions.items():
+            if pos is not None:
+                points.append(pos)
+                weights.append(1.2)
+        
+        for name, pos in target_positions.items():
+            if pos is not None:
+                points.append(pos)
+                weights.append(0.8)
+        
+        if not points:
+            return self.lookat  # Fallback to current position
+        
+        points = np.array(points)
+        weights = np.array(weights)
+        weights /= weights.sum()
+        
+        return np.average(points, axis=0, weights=weights)
+    
+    def update(self, drone_positions, target_positions, any_target_changed=False):
+        """
+        Update camera position to track all drones and targets.
+        
+        Uses velocity-based smoothing for extra fluid motion.
+        """
+        if any_target_changed:
+            self.in_transition = True
+            self.transition_frames = self.transition_duration
+            # Dampen velocity on target change for smoother transition
+            self.lookat_velocity *= 0.3
+        
+        # Compute desired lookat (centroid of all positions)
+        desired_lookat = self._compute_centroid(drone_positions, target_positions)
+        
+        # Choose lerp speed based on transition state
+        if self.in_transition:
+            # Smooth ease-out curve (quintic for extra smoothness)
+            progress = 1.0 - (self.transition_frames / self.transition_duration)
+            ease = 1.0 - (1.0 - progress) ** 5  # Quintic ease-out
+            
+            speed = self.transition_speed + (self.normal_speed - self.transition_speed) * ease
+            
+            self.transition_frames -= 1
+            if self.transition_frames <= 0:
+                self.in_transition = False
+        else:
+            speed = self.normal_speed
+        
+        # Compute target displacement
+        displacement = desired_lookat - self.lookat
+        
+        # Velocity-based smoothing: blend current velocity with new direction
+        target_velocity = displacement * speed
+        self.lookat_velocity = (self.lookat_velocity * self.velocity_damping + 
+                                target_velocity * (1.0 - self.velocity_damping))
+        
+        # Apply velocity
+        self.lookat = self.lookat + self.lookat_velocity
+        
+        self._apply_camera()
+    
+    def reset(self, drone_positions, target_positions):
+        """Hard reset camera position for new episode."""
+        self.lookat = self._compute_centroid(drone_positions, target_positions)
+        self.lookat_velocity = np.zeros(3)
+        self.in_transition = False
+        self.transition_frames = 0
+        self._apply_camera()
+
+
+# ============================================================================
+# TRAJECTORY TRAIL RENDERER
+# ============================================================================
 
 class TrajectoryTrails:
     """Manages colored trajectory trails using spheres."""
@@ -39,7 +164,7 @@ class TrajectoryTrails:
             'DAgger': np.array([0.2, 0.2, 0.9, 0.9]),
             'PPO': np.array([0.9, 0.2, 0.2, 0.9]),
         }
-        self.record_interval = 25
+        self.record_interval = 50
         self.step_count = 0
     
     def reset(self):
@@ -263,6 +388,16 @@ class TripleDroneEnv:
                 positions[name] = None
         return positions
     
+    def get_target_positions(self):
+        """Get all target positions (for camera tracking)."""
+        targets = {}
+        for name, drone in self.drones.items():
+            if not drone.crashed:
+                targets[name] = drone.target_pos.copy()
+            else:
+                targets[name] = None
+        return targets
+    
     def apply_action(self, drone_name, action_normalized):
         drone = self.drones[drone_name]
         motors = (action_normalized + 1.0) * 6.0
@@ -392,12 +527,15 @@ def run_parallel_benchmark(args):
     all_stats = {name: defaultdict(list) for name in policies}
     
     viewer = None
+    camera = None
     if args.visualize:
         viewer = mujoco.viewer.launch_passive(env.model, env.data)
-        viewer.cam.lookat[:] = [0, 0, 3]
-        viewer.cam.distance = 20
-        viewer.cam.elevation = -25
-        viewer.cam.azimuth = 135
+        camera = MultiDroneTrackingCamera(
+            viewer,
+            distance=args.cam_distance,
+            azimuth=args.cam_azimuth,
+            elevation=args.cam_elevation
+        )
     
     np.random.seed(args.master_seed)
     episode_seeds = np.random.randint(0, 100000, size=args.episodes)
@@ -407,6 +545,8 @@ def run_parallel_benchmark(args):
     print(f"  Max steps: {args.max_steps}")
     print(f"  Target distance: {args.distance}m")
     print(f"  Trail length: {args.trail_length} points")
+    if camera:
+        print(f"  Camera: distance={args.cam_distance}, azimuth={args.cam_azimuth}°, elevation={args.cam_elevation}°")
     print()
     
     global_step = 0
@@ -420,6 +560,10 @@ def run_parallel_benchmark(args):
         trails.reset()
         for policy in policies.values():
             policy.reset()
+        
+        # Reset camera to initial positions
+        if camera:
+            camera.reset(env.get_positions(), env.get_target_positions())
         
         step = 0
         episode_done = False
@@ -447,6 +591,9 @@ def run_parallel_benchmark(args):
             # Update trails
             trails.update(env.get_positions())
             
+            # Check if any target was reached (for camera transition)
+            any_target_changed = any(res['target_reached'] for res in results.values())
+            
             # Log events
             for name, res in results.items():
                 if res['target_reached']:
@@ -461,6 +608,14 @@ def run_parallel_benchmark(args):
             
             # Render
             if viewer and viewer.is_running():
+                # Update tracking camera
+                if camera:
+                    camera.update(
+                        env.get_positions(),
+                        env.get_target_positions(),
+                        any_target_changed=any_target_changed
+                    )
+                
                 trails.render(viewer)
                 viewer.sync()
                 if args.slow_factor > 0:
@@ -523,15 +678,23 @@ def main():
     parser.add_argument("--ppo-path", default="ppo_dagger.zip")
     
     parser.add_argument("--episodes", type=int, default=10)
-    parser.add_argument("--max-steps", type=int, default=2000)
+    parser.add_argument("--max-steps", type=int, default=5000)
     parser.add_argument("--distance", type=float, default=7.0)
     parser.add_argument("--master-seed", type=int, default=42)
     
     parser.add_argument("--visualize", action="store_true", default=True)
     parser.add_argument("--no-vis", action="store_true")
     parser.add_argument("--slow-factor", type=float, default=0.0)
-    parser.add_argument("--trail-length", type=int, default=1500,
+    parser.add_argument("--trail-length", type=int, default=40,
                         help="Max points per trail")
+    
+    # Camera settings
+    parser.add_argument("--cam-distance", type=float, default=13.0,
+                        help="Camera distance from lookat point")
+    parser.add_argument("--cam-azimuth", type=float, default=135.0,
+                        help="Camera azimuth angle (degrees) - FIXED")
+    parser.add_argument("--cam-elevation", type=float, default=-23.0,
+                        help="Camera elevation angle (degrees) - FIXED")
     
     args = parser.parse_args()
     

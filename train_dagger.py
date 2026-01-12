@@ -188,7 +188,7 @@ def collect_dagger_data(env, policy, expert, num_episodes=10, max_steps=1000,
             
             if viewer and viewer.is_running():
                 viewer.sync()
-                time.sleep(dt)  # Real-time
+                time.sleep(dt)  # Real-time only if viewer is running
         
         total_targets += ep_targets
         status = "CRASH" if pos[2] < 0.1 else "OK"

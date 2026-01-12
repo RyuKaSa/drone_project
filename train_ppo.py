@@ -150,7 +150,23 @@ class PPODroneEnv(gym.Env):
         reward -= np.linalg.norm(ang_vel) * 0.02
         reward -= np.mean(np.abs(action)) * 0.01
         self.prev_distance = distance
-        
+
+        # === PRECISION REWARDS ===
+        to_target = self.target_pos - pos
+        to_target_norm = to_target / (distance + 1e-6)
+        vel_world = self.data.qvel[:3]
+        speed = np.linalg.norm(vel_world)
+        vel_norm = vel_world / (speed + 1e-6)
+
+        # 1. Velocity alignment (move toward target)
+        alignment = np.dot(vel_norm, to_target_norm)
+        reward += alignment * 0.05
+
+        # 2. Perpendicular velocity penalty (no circling)
+        vel_parallel = np.dot(vel_world, to_target_norm) * to_target_norm
+        vel_perp = vel_world - vel_parallel
+        reward -= np.linalg.norm(vel_perp) * 0.01
+
         # Target reached
         if distance < self.target_radius:
             reward += 10.0
@@ -591,7 +607,7 @@ def main():
     parser.add_argument("--eval-only", action="store_true")
     
     # Training
-    parser.add_argument("--total-timesteps", type=int, default=50_000_000)
+    parser.add_argument("--total-timesteps", type=int, default=1_000_000)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--n-envs", type=int, default=4)
     parser.add_argument("--n-steps", type=int, default=2048)
@@ -601,7 +617,7 @@ def main():
     parser.add_argument("--ent-coef", type=float, default=0.01)
     
     # Curriculum
-    parser.add_argument("--easy-start", type=float, default=0.4)
+    parser.add_argument("--easy-start", type=float, default=0.9)
     parser.add_argument("--easy-end", type=float, default=0.1)
     
     # DAgger

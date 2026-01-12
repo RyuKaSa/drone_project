@@ -232,7 +232,6 @@ class TrackingCamera:
         # Camera position (what we're looking at)
         self.lookat = np.array([0.0, 0.0, 3.0])
         
-        # FIXED camera orientation - set once, never changes
         self.distance = distance
         self.azimuth = azimuth
         self.elevation = elevation
@@ -394,7 +393,6 @@ def run_inference(model_path, num_episodes=10, max_steps=2000, easy_ratio=0.5,
             if crashed:
                 total_crashes += 1
             
-            # Brief pause between episodes
             time.sleep(0.5)
     
     except KeyboardInterrupt:
