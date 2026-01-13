@@ -1,5 +1,5 @@
 """
-Parallel Visual Benchmark: PID vs DAgger vs PPO
+Parallel Visual Benchmark: PID vs DAgger vs PPO Base vs PPO
 Same position, same targets, trajectory trails.
 With smooth tracking camera following all drones.
 """
@@ -157,14 +157,16 @@ class TrajectoryTrails:
         self.trails = {
             'PID': deque(maxlen=max_points),
             'DAgger': deque(maxlen=max_points),
+            'PPO_Base': deque(maxlen=max_points),
             'PPO': deque(maxlen=max_points),
         }
         self.colors = {
-            'PID': np.array([0.2, 0.9, 0.2, 0.9]),
-            'DAgger': np.array([0.2, 0.2, 0.9, 0.9]),
-            'PPO': np.array([0.9, 0.2, 0.2, 0.9]),
+            'PID': np.array([0.2, 0.9, 0.2, 0.9]),       # Green
+            'DAgger': np.array([0.2, 0.2, 0.9, 0.9]),    # Blue
+            'PPO_Base': np.array([0.95, 0.85, 0.2, 0.9]),# Yellow
+            'PPO': np.array([0.9, 0.2, 0.2, 0.9]),       # Red
         }
-        self.record_interval = 50
+        self.record_interval = 20
         self.step_count = 0
     
     def reset(self):
@@ -207,7 +209,7 @@ class TrajectoryTrails:
                 mujoco.mjv_initGeom(
                     geom,
                     mujoco.mjtGeom.mjGEOM_SPHERE,
-                    np.array([0.03, 0, 0]),  # size (radius)
+                    np.array([0.05, 0, 0]),  # size (radius)
                     p,  # position
                     np.eye(3).flatten(),  # rotation matrix
                     np.array([color[0], color[1], color[2], alpha * color[3]])
@@ -249,8 +251,8 @@ class DroneState:
         self.steps = 0
         self.target_index = 0
 
-class TripleDroneEnv:
-    """Environment with 3 superimposed drones, SHARED target sequence."""
+class QuadDroneEnv:
+    """Environment with 4 superimposed drones, SHARED target sequence."""
     
     def __init__(self, model_path="model_benchmark.xml", target_distance=7.0):
         self.model = mujoco.MjModel.from_xml_path(model_path)
@@ -259,10 +261,13 @@ class TripleDroneEnv:
         self.target_distance = target_distance
         self.target_radius = 0.5
         
+        # 4 drones: PID, DAgger, PPO_Base, PPO
+        # Each drone has 7 qpos (3 pos + 4 quat), 6 qvel (3 vel + 3 angvel), 4 ctrl
         self.drones = {
             'PID': DroneState('PID', qpos_start=0, qvel_start=0, ctrl_start=0, mocap_id=0),
             'DAgger': DroneState('DAgger', qpos_start=7, qvel_start=6, ctrl_start=4, mocap_id=1),
-            'PPO': DroneState('PPO', qpos_start=14, qvel_start=12, ctrl_start=8, mocap_id=2),
+            'PPO_Base': DroneState('PPO_Base', qpos_start=14, qvel_start=12, ctrl_start=8, mocap_id=2),
+            'PPO': DroneState('PPO', qpos_start=21, qvel_start=18, ctrl_start=12, mocap_id=3),
         }
         
         self.rng = np.random.default_rng()
@@ -490,7 +495,21 @@ class DAggerPolicy:
         return self.model.get_action(obs)
 
 
+class PPOBasePolicy:
+    """PPO policy trained with bulk training, without fine-tuning."""
+    def __init__(self, path="tempo/ppo_dagger.zip"):
+        self.model = PPO.load(path)
+    
+    def reset(self):
+        pass
+    
+    def get_action(self, obs):
+        action, _ = self.model.predict(obs, deterministic=True)
+        return action
+
+
 class PPOPolicy:
+    """PPO policy with fine-tuning."""
     def __init__(self, path="ppo_dagger.zip"):
         self.model = PPO.load(path)
     
@@ -507,22 +526,23 @@ class PPOPolicy:
 # ============================================================================
 
 def run_parallel_benchmark(args):
-    print("=" * 60)
-    print("PARALLEL BENCHMARK: PID (green) vs DAgger (blue) vs PPO (red)")
-    print("=" * 60)
+    print("=" * 70)
+    print("PARALLEL BENCHMARK: PID (green) vs DAgger (blue) vs PPO Base (yellow) vs PPO (red)")
+    print("=" * 70)
     
     writer = SummaryWriter(log_dir=f"./runs/parallel_{int(time.time())}")
     
-    env = TripleDroneEnv(model_path=args.model_path, target_distance=args.distance)
+    env = QuadDroneEnv(model_path=args.model_path, target_distance=args.distance)
     trails = TrajectoryTrails(max_points=args.trail_length)
     
     print("\nLoading policies...")
     policies = {
         'PID': PIDPolicy(dt=env.dt),
         'DAgger': DAggerPolicy(args.dagger_path),
+        'PPO_Base': PPOBasePolicy(args.ppo_base_path),
         'PPO': PPOPolicy(args.ppo_path),
     }
-    print("  ✓ PID (green), DAgger (blue), PPO (red)")
+    print("  ✓ PID (green), DAgger (blue), PPO Base (yellow), PPO (red)")
     
     all_stats = {name: defaultdict(list) for name in policies}
     
@@ -551,10 +571,13 @@ def run_parallel_benchmark(args):
     
     global_step = 0
     
+    # Define display order
+    drone_order = ['PID', 'DAgger', 'PPO_Base', 'PPO']
+    
     for ep_idx, seed in enumerate(episode_seeds):
-        print(f"\n{'='*60}")
+        print(f"\n{'='*70}")
         print(f"Episode {ep_idx + 1}/{args.episodes} (seed={seed})")
-        print(f"{'='*60}")
+        print(f"{'='*70}")
         
         env.reset(seed=int(seed))
         trails.reset()
@@ -570,7 +593,7 @@ def run_parallel_benchmark(args):
         
         while step < args.max_steps and not episode_done:
             # Compute actions
-            for name in ['PID', 'DAgger', 'PPO']:
+            for name in drone_order:
                 drone = env.drones[name]
                 if drone.crashed:
                     continue
@@ -625,10 +648,11 @@ def run_parallel_benchmark(args):
         
         # Episode summary
         print(f"\nEpisode {ep_idx + 1} Results:")
-        for name, drone in env.drones.items():
+        for name in drone_order:
+            drone = env.drones[name]
             status = "CRASH" if drone.crashed else "OK"
-            color = {'PID': '🟢', 'DAgger': '🔵', 'PPO': '🔴'}[name]
-            print(f"  {color} {name:8s}: {drone.targets_reached:2d} targets, "
+            color = {'PID': '🟢', 'DAgger': '🔵', 'PPO_Base': '🟡', 'PPO': '🔴'}[name]
+            print(f"  {color} {name:10s}: {drone.targets_reached:2d} targets, "
                   f"reward={drone.total_reward:7.1f}, {drone.steps:4d} steps [{status}]")
             
             all_stats[name]['targets'].append(drone.targets_reached)
@@ -642,21 +666,21 @@ def run_parallel_benchmark(args):
         viewer.close()
     
     # Final summary
-    print(f"\n{'='*60}")
+    print(f"\n{'='*70}")
     print("FINAL RESULTS")
-    print(f"{'='*60}")
-    print(f"{'':3}{'Policy':<10} {'Targets/Ep':>12} {'Reward/Ep':>12} {'Crash %':>10}")
-    print("-" * 55)
+    print(f"{'='*70}")
+    print(f"{'':3}{'Policy':<12} {'Targets/Ep':>12} {'Reward/Ep':>12} {'Crash %':>10}")
+    print("-" * 60)
     
-    for name in ['PID', 'DAgger', 'PPO']:
+    for name in drone_order:
         stats = all_stats[name]
         avg_t = np.mean(stats['targets'])
         std_t = np.std(stats['targets'])
         avg_r = np.mean(stats['rewards'])
         crash_pct = np.mean(stats['crashes']) * 100
-        color = {'PID': '🟢', 'DAgger': '🔵', 'PPO': '🔴'}[name]
+        color = {'PID': '🟢', 'DAgger': '🔵', 'PPO_Base': '🟡', 'PPO': '🔴'}[name]
         
-        print(f"{color} {name:<10} {avg_t:>8.2f}±{std_t:<4.1f} {avg_r:>12.1f} {crash_pct:>9.1f}%")
+        print(f"{color} {name:<12} {avg_t:>8.2f}±{std_t:<4.1f} {avg_r:>12.1f} {crash_pct:>9.1f}%")
     
     writer.close()
     
@@ -675,12 +699,13 @@ def main():
     
     parser.add_argument("--model-path", default="model_benchmark.xml")
     parser.add_argument("--dagger-path", default="dagger_policy.pt")
+    parser.add_argument("--ppo-base-path", default="tempo/ppo_dagger.zip")
     parser.add_argument("--ppo-path", default="ppo_dagger.zip")
     
-    parser.add_argument("--episodes", type=int, default=10)
+    parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--max-steps", type=int, default=5000)
-    parser.add_argument("--distance", type=float, default=7.0)
-    parser.add_argument("--master-seed", type=int, default=42)
+    parser.add_argument("--distance", type=float, default=5.0)
+    parser.add_argument("--master-seed", type=int, default=32)
     
     parser.add_argument("--visualize", action="store_true", default=True)
     parser.add_argument("--no-vis", action="store_true")
@@ -689,7 +714,7 @@ def main():
                         help="Max points per trail")
     
     # Camera settings
-    parser.add_argument("--cam-distance", type=float, default=13.0,
+    parser.add_argument("--cam-distance", type=float, default=14.0,
                         help="Camera distance from lookat point")
     parser.add_argument("--cam-azimuth", type=float, default=135.0,
                         help="Camera azimuth angle (degrees) - FIXED")

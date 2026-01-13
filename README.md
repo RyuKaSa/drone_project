@@ -27,9 +27,11 @@ This short video shows the capabilities of the PPO model after training for 50 0
 
 To demosntrate the finetuning of the PPO model, we compare it to the extremely stable PID controller and the DAgger model, with the exact same targets. After only 1 000 000 additional of training steps, and new rewards to force more precise movements, and no overshoot, no perpendicular drift, the PPO model which was already outperforming the 2 other models, manages to further improve its performances, and reach target in a strict manner. This shocases that once the bulk training for learning stability, and basic cardinal control is done, we can relatively quickly finetune the PPO model for various more specific tasks.
 
-![Benchmark](images/benchmark_GIF.gif)
+![Benchmark](images/4drone_demo.gif)
 
 🔴 => PPO RL model (finetuned with additional training as per text above)
+
+🟡 => PPO RL model (bulk training, simple rewards)
 
 🔵 => DAgger model
 

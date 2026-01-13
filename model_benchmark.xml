@@ -1,9 +1,10 @@
-<mujoco model="TripleDrone_Benchmark">
+<mujoco model="QuadDrone_Benchmark">
   <!--
-    3 Drones superimposed for visual comparison:
+    4 Drones superimposed for visual comparison:
     - PID: Green
     - DAgger: Blue  
-    - PPO: Red
+    - PPO Base: Yellow (bulk trained, no fine-tuning)
+    - PPO: Red (fine-tuned)
     No collision between drones (contype=2, conaffinity=1)
     Collide with ground only.
   -->
@@ -121,7 +122,51 @@
     </body>
 
     <!-- ============================================================ -->
-    <!-- DRONE PPO - RED -->
+    <!-- DRONE PPO BASE - YELLOW (bulk trained, no fine-tuning) -->
+    <!-- ============================================================ -->
+    <body name="drone_ppo_base" pos="0 0 3">
+      <freejoint name="root_ppo_base"/>
+      <inertial pos="0 0 0" mass="1.5" diaginertia="0.02 0.02 0.03"/>
+      
+      <geom name="chassis_ppo_base" type="box" size="0.1 0.06 0.03" rgba="0.7 0.6 0.1 1" mass="1.0" contype="2" conaffinity="1"/>
+      <geom name="cover_ppo_base" type="box" size="0.08 0.05 0.015" pos="0 0 0.04" rgba="0.8 0.7 0.15 1"/>
+      
+      <geom type="capsule" fromto="0.05 -0.04 0 0.17 -0.17 0" size="0.012" rgba="0.6 0.5 0.05 1"/>
+      <geom type="capsule" fromto="0.05 0.04 0 0.17 0.17 0" size="0.012" rgba="0.6 0.5 0.05 1"/>
+      <geom type="capsule" fromto="-0.05 -0.04 0 -0.17 -0.17 0" size="0.012" rgba="0.6 0.5 0.05 1"/>
+      <geom type="capsule" fromto="-0.05 0.04 0 -0.17 0.17 0" size="0.012" rgba="0.6 0.5 0.05 1"/>
+      
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 -0.17 0.01" rgba="0.5 0.4 0.02 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="0.17 0.17 0.01" rgba="0.5 0.4 0.02 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 0.17 0.01" rgba="0.5 0.4 0.02 1"/>
+      <geom type="cylinder" size="0.02 0.015" pos="-0.17 -0.17 0.01" rgba="0.5 0.4 0.02 1"/>
+      
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 -0.17 0.03" rgba="0.5 0.45 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="0.17 0.17 0.03" rgba="0.5 0.45 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 0.17 0.03" rgba="0.5 0.45 0.1 0.6"/>
+      <geom type="cylinder" size="0.11 0.006" pos="-0.17 -0.17 0.03" rgba="0.5 0.45 0.1 0.6"/>
+      
+      <site name="thrust_fr_ppo_base" pos="0.17 -0.17 0.03" size="0.01"/>
+      <site name="thrust_fl_ppo_base" pos="0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rl_ppo_base" pos="-0.17 0.17 0.03" size="0.01"/>
+      <site name="thrust_rr_ppo_base" pos="-0.17 -0.17 0.03" size="0.01"/>
+      
+      <geom type="box" size="0.03 0.008 0.008" pos="0.13 0 0.04" rgba="1 0.9 0.3 1"/>
+      
+      <geom type="sphere" size="0.018" pos="0.12 -0.12 -0.06" rgba="0.5 0.4 0.05 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="0.12 0.12 -0.06" rgba="0.5 0.4 0.05 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 0.12 -0.06" rgba="0.5 0.4 0.05 1" contype="2" conaffinity="1"/>
+      <geom type="sphere" size="0.018" pos="-0.12 -0.12 -0.06" rgba="0.5 0.4 0.05 1" contype="2" conaffinity="1"/>
+    </body>
+
+    <!-- TARGET PPO BASE - YELLOW -->
+    <body name="target_ppo_base" mocap="true" pos="0 5 3">
+      <geom type="box" size="0.25 0.25 0.25" rgba="0.9 0.8 0.2 0.3"/>
+      <geom type="sphere" size="0.1" rgba="1 0.9 0.3 0.8"/>
+    </body>
+
+    <!-- ============================================================ -->
+    <!-- DRONE PPO - RED (fine-tuned) -->
     <!-- ============================================================ -->
     <body name="drone_ppo" pos="0 0 3">
       <freejoint name="root_ppo"/>
@@ -177,6 +222,11 @@
     <motor name="motor_fl_dagger" site="thrust_fl_dagger" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
     <motor name="motor_rl_dagger" site="thrust_rl_dagger" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
     <motor name="motor_rr_dagger" site="thrust_rr_dagger" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    
+    <motor name="motor_fr_ppo_base" site="thrust_fr_ppo_base" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_fl_ppo_base" site="thrust_fl_ppo_base" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
+    <motor name="motor_rl_ppo_base" site="thrust_rl_ppo_base" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
+    <motor name="motor_rr_ppo_base" site="thrust_rr_ppo_base" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
     
     <motor name="motor_fr_ppo" site="thrust_fr_ppo" gear="0 0 1 0 0  0.02" ctrlrange="0 12"/>
     <motor name="motor_fl_ppo" site="thrust_fl_ppo" gear="0 0 1 0 0 -0.02" ctrlrange="0 12"/>
