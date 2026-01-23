@@ -43,7 +43,7 @@ public class PublishImu : MonoBehaviour
         {
             header = new Header
             {
-                // stamp = rosSocket.Now(),
+                stamp = PublishMessage(),
                 frame_id = frameId
             },
             angular_velocity = new RosVector3
@@ -69,16 +69,14 @@ public class PublishImu : MonoBehaviour
             imu.OnImuMeasured -= OnImuMeasured;
     }
 
-    // public static (int, uint) PublishMessage()
-    // {
-    //     var publishTime = Clock.time;
-    //     var clockMsg = new TimeMsg
-    //     {
-    //         sec = (int)publishTime,
-    //         nanosec = (uint)((publishTime - Math.Floor(publishTime)) * Clock.k_NanoSecondsInSeconds)
-    //     };
+    public static (int sec, uint nanosec) PublishMessage()
+    {
+        double publishTime = Time.realtimeSinceStartupAsDouble;
 
-    //     return (clockMsg.sec, clockMsg.nanosec);
-    // }
+        int sec = (int)Math.Floor(publishTime);
+        uint nanosec = (uint)((publishTime - sec) * 1e9);
+
+        return (sec, nanosec);
+    }
 
 }

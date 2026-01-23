@@ -48,7 +48,7 @@ public class RosCameraPublisher : MonoBehaviour
         {
             header = new std_msgs.Header
             {
-                // stamp = rosSocket.Now(), // Sync with ROS clock
+                stamp = PublishImu.PublishMessage(), // Sync with ROS clock
                 frame_id = frameId
             },
             height = (uint)image.height,
