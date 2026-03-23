@@ -5,9 +5,9 @@ Uses Stable Baselines3 PPO but with a custom policy that has LayerNorm,
 exactly matching the DAgger BCPolicy. This allows direct weight transfer.
 
 Usage:
-    python train_ppo_custom.py                    # Train from DAgger
-    python train_ppo_custom.py --resume           # Resume training
-    python train_ppo_custom.py --eval-only        # Evaluate
+    python train_ppo.py                    # Train from DAgger
+    python train_ppo.py --resume           # Resume training
+    python train_ppo.py --eval-only        # Evaluate
 """
 
 import argparse

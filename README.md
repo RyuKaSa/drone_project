@@ -10,7 +10,7 @@ This repository implements drone control policies trained with reinforcement lea
 
 - **drone_env_simple.py** / **drone_env_cardinal.py**: MuJoCo-based drone environments (13D body-frame observations, 4D continuous motor actions)
 - **train_dagger.py**: DAgger imitation learning from PID expert with dataset aggregation
-- **train_ppo_custom.py**: PPO training with custom LayerNorm policy (matching DAgger architecture for weight transfer), curriculum scheduling, and precision reward shaping
+- **train_ppo.py**: PPO training with custom LayerNorm policy (matching DAgger architecture for weight transfer), curriculum scheduling, and precision reward shaping
 - **pid_controller.py**: Pure PID controller baseline (altitude + attitude + velocity cascaded loops)
 - **drone_inference.py**: Inference visualization with smooth tracking camera
 - **bench_parallel.py**: Parallel multi-agent benchmarking
