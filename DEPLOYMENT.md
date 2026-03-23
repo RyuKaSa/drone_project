@@ -6,7 +6,7 @@ After training RL policies in MuJoCo simulation, a sim-to-real transfer was atte
 
 The objective was to run the trained PPO policy on a host PC, streaming observations from the drone's onboard sensors and sending back motor commands in real time.
 
-![esp_drone](esp_drone_images\image0.jpeg)
+![esp_drone](esp_drone_images/image0.jpeg)
 
 ## What Was Achieved
 
